@@ -12,5 +12,7 @@ export const jobsTable = sqliteTable("jobs", {
                             .default(sql`(unixepoch())`),
     updatedAt:          integer({ mode: 'timestamp' })
                             .notNull()
-                            .default(sql`(unixepoch())`)
+                            .default(sql`(unixepoch())`),
+    lastError:          text(),
+    postingHtml:        text(),
 });

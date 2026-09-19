@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { jobsTable } from './db/schema';
 import * as schema from './db/schema';
-import { desc, eq, asc } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
+import claimOldestJob from './jobs/claim-oldest-job';
+import processNext from './jobs/process-next-job';
 
 type ImportJobRequest = {
   url: string;
@@ -64,7 +66,7 @@ app.post('/jobs/import', async (c) => {
   )
   .onConflictDoNothing({ target: jobsTable.sourceUrl })
   .returning()
-  .get();
+  .get()
 
   if (job) {
     return c.json({ job }, 202);
@@ -82,30 +84,21 @@ app.get('/all-jobs', async (c) => {
   const allJobs = await db
   .select()
   .from(jobsTable)
-  .orderBy(desc(jobsTable.createdAt));
+  .orderBy(desc(jobsTable.createdAt))
   return c.json({ jobs: allJobs }, 200);
 });
 
-app.post('/jobs/process-oldest', async (c) => {
-  const db = drizzle(c.env.job_app_db, { schema });
-  const oldestQueuedJob = await db
-    .select()
-    .from(jobsTable)
-    .where(eq(jobsTable.ingestionStatus, 'queued'))
-    .orderBy(asc(jobsTable.createdAt))
-    .limit(1)
-    .get();
-  if (!oldestQueuedJob) {
-    return c.body(null, 204);
-  }
-  const updatedJob = await db.update(jobsTable)
-    .set({ ingestionStatus: "processing", updatedAt: new Date() })
-    .where(eq(jobsTable.id, oldestQueuedJob.id))
-    .returning()
-    .get();
-  return c.json({ job: updatedJob }, 200)
-
+app.post('/jobs/claim-oldest', async (c) => {
+  const claimed = await claimOldestJob(c.env.job_app_db);
+  return claimed ? c.json({ job: claimed }, 200) : c.body(null, 204);
 })
 
 
-export default app
+const worker = {
+  fetch: app.fetch,
+  async scheduled(_event, env, _ctx) {
+    await processNext(env.job_app_db)
+  }
+} satisfies ExportedHandler<CloudflareBindings>
+
+export default worker

@@ -8,6 +8,20 @@
       "when": 1788910582310,
       "tag": "0000_gigantic_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789501349179,
+      "tag": "0001_tiny_king_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789757614815,
+      "tag": "0002_sad_vermin",
+      "breakpoints": true
     }
   ]
 }

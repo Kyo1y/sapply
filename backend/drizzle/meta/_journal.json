@@ -22,6 +22,20 @@
       "when": 1789757614815,
       "tag": "0002_sad_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789849681808,
+      "tag": "0003_even_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789851903895,
+      "tag": "0004_nasty_orphan",
+      "breakpoints": true
     }
   ]
 }

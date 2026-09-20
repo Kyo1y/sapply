@@ -5,6 +5,8 @@ import * as schema from './db/schema';
 import { desc } from 'drizzle-orm';
 import claimOldestJob from './jobs/claim-oldest-job';
 import processNext from './jobs/process-next-job';
+import syncApplyGuyCompanies from './workflows/sync-applyguy-companies';
+import { listCompanies } from './db/company-repository';
 
 type ImportJobRequest = {
   url: string;
@@ -86,6 +88,21 @@ app.get('/all-jobs', async (c) => {
   .from(jobsTable)
   .orderBy(desc(jobsTable.createdAt))
   return c.json({ jobs: allJobs }, 200);
+});
+
+app.get('/companies', async (c) => {
+  const companies = await listCompanies(c.env.job_app_db);
+  return c.json({ companies }, 200);
+});
+
+app.post('/companies/sync/applyguy', async (c) => {
+  try {
+    const sync = await syncApplyGuyCompanies(c.env.job_app_db);
+    return c.json({ sync }, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 502);
+  }
 });
 
 app.post('/jobs/claim-oldest', async (c) => {

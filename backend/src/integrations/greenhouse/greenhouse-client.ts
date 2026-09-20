@@ -15,10 +15,12 @@ export type GreenhouseJob = {
     postingHtml: string;
 };
 
+/** Narrows an unknown JSON value to a plain object. */
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Parses and validates a timestamp from a Greenhouse response. */
 function parseDate(value: unknown, field: string): Date {
     if (typeof value !== 'string') {
         throw new Error(`Greenhouse ${field} must be a timestamp`);
@@ -33,6 +35,7 @@ function parseDate(value: unknown, field: string): Date {
     return new Date(milliseconds);
 }
 
+/** Parses and validates Greenhouse's numeric job-post identifier. */
 function parseJobId(value: unknown): number {
     if (
         typeof value !== 'number' ||
@@ -45,6 +48,7 @@ function parseJobId(value: unknown): number {
     return value;
 }
 
+/** Parses a required job title and removes surrounding whitespace. */
 function parseTitle(value: unknown): string {
     if (typeof value !== 'string' || value.trim().length === 0) {
         throw new Error('Greenhouse job title must be a non-empty string');
@@ -53,6 +57,7 @@ function parseTitle(value: unknown): string {
     return value.trim();
 }
 
+/** Parses an HTTP application URL from a Greenhouse response. */
 function parseHttpUrl(value: unknown): string {
     if (typeof value !== 'string') {
         throw new Error('Greenhouse absolute_url must be a URL');
@@ -73,6 +78,7 @@ function parseHttpUrl(value: unknown): string {
     return url.toString();
 }
 
+/** Returns the location name when Greenhouse supplies one. */
 function parseLocation(value: unknown): string | null {
     if (!isRecord(value) || typeof value.name !== 'string') {
         return null;
@@ -82,6 +88,7 @@ function parseLocation(value: unknown): string | null {
     return location.length > 0 ? location : null;
 }
 
+/** Converts the untrusted list response into job summaries we can use safely. */
 export function parseGreenhouseJobList(value: unknown): GreenhouseJobSummary[] {
     if (!isRecord(value) || !Array.isArray(value.jobs)) {
         throw new Error('Greenhouse job list does not contain a jobs array');
@@ -100,6 +107,7 @@ export function parseGreenhouseJobList(value: unknown): GreenhouseJobSummary[] {
     });
 }
 
+/** Converts one untrusted detail response into a complete Greenhouse job. */
 export function parseGreenhouseJob(value: unknown): GreenhouseJob {
     if (!isRecord(value)) {
         throw new Error('Greenhouse job response must be an object');
@@ -119,6 +127,7 @@ export function parseGreenhouseJob(value: unknown): GreenhouseJob {
     };
 }
 
+/** Fetches JSON from Greenhouse and rejects unsuccessful HTTP responses. */
 async function getJson(
     url: string,
     fetcher: typeof fetch,
@@ -134,6 +143,7 @@ async function getJson(
     return response.json();
 }
 
+/** Fetches every published job summary for one Greenhouse career board. */
 export async function listGreenhouseJobs(
     boardToken: string,
     fetcher: typeof fetch = fetch,
@@ -143,6 +153,7 @@ export async function listGreenhouseJobs(
     return parseGreenhouseJobList(body);
 }
 
+/** Fetches one full Greenhouse job, including its employer publication time. */
 export async function getGreenhouseJob(
     boardToken: string,
     jobId: number,

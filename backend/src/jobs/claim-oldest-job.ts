@@ -5,6 +5,7 @@ import * as schema from '../db/schema';
 import type { Job } from "../types/job";
 
 
+/** Atomically moves the oldest queued job into the processing state. */
 export default async function claimOldestJob(d1: D1Database): Promise<Job | undefined> {
     const db = drizzle(d1, { schema });
     const oldestQueuedJob = await db

@@ -20,6 +20,10 @@ type CompanySeedBuilder = {
     detectedSources: Map<string, DetectedCompanySource>;
 };
 
+/**
+ * Reads the ApplyGuy feed and syncs its companies and detected career boards
+ * into our company registry.
+ */
 export default async function syncApplyGuyCompanies(
     d1: D1Database,
 ): Promise<ApplyGuyCompanySyncResult> {

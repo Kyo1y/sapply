@@ -27,6 +27,11 @@ export type GreenhouseDiscoveryResult = {
     jobsUpdated: number;
 };
 
+/**
+ * Runs one full discovery cycle for one Greenhouse career board.
+ * The function chooses the board, fetches recent jobs, filters them, saves the
+ * eligible jobs, and records whether the board poll succeeded.
+ */
 export default async function discoverNextGreenhouseSource(
     d1: D1Database,
     options: {

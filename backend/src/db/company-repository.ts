@@ -29,6 +29,7 @@ export type CompanySyncResult = {
 const WRITE_CHUNK_SIZE = 10;
 const READ_CHUNK_SIZE = 50;
 
+/** Splits large database operations into smaller D1 requests. */
 function chunksOf<T>(items: T[], size: number): T[][] {
     const chunks: T[][] = [];
 
@@ -39,11 +40,16 @@ function chunksOf<T>(items: T[], size: number): T[][] {
     return chunks;
 }
 
+/** Returns every registered company in alphabetical order. */
 export async function listCompanies(d1: D1Database): Promise<Company[]> {
     const db = drizzle(d1, { schema });
     return db.select().from(companiesTable).orderBy(asc(companiesTable.name));
 }
 
+/**
+ * Matches company observations from a feed to the registry, then stores new
+ * companies, their official career boards, and the feed that found them.
+ */
 export async function syncDiscoveredCompanies(
     d1: D1Database,
     seeds: CompanySeed[],

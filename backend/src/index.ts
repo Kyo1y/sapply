@@ -15,6 +15,7 @@ type ImportJobRequest = {
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
+/** Checks the JSON shape accepted by the manual job-import endpoint. */
 function isImportJobRequest(value: unknown): value is ImportJobRequest {
   return (
     typeof value === 'object' &&
@@ -24,6 +25,7 @@ function isImportJobRequest(value: unknown): value is ImportJobRequest {
   )
 }
 
+/** Accepts only valid HTTP and HTTPS URLs and returns their canonical form. */
 function parseHttpUrl(value: string): URL | null {
   try {
     const url = new URL(value)

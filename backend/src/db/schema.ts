@@ -17,6 +17,7 @@ export const companiesTable = sqliteTable("companies", {
                             .default(sql`(unixepoch())`),
 });
 
+/** Stores official company career boards that our scheduler can poll. */
 export const companySourcesTable = sqliteTable("companySources", {
     id:                 text().primaryKey(),
     companyId:          text()
@@ -45,6 +46,7 @@ export const companySourcesTable = sqliteTable("companySources", {
         .on(table.provider, table.externalKey),
 ]);
 
+/** Records which external feed introduced each company to our registry. */
 export const companyDiscoveriesTable = sqliteTable("companyDiscoveries", {
     id:                 text().primaryKey(),
     companyId:          text()
@@ -70,6 +72,7 @@ export const jobsTable = sqliteTable("jobs", {
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),
     companySourceId:    text().references(() => companySourcesTable.id, { onDelete: 'set null' }),
     externalId:         text(),
+    // The official application page for this job.
     sourceUrl:          text().notNull().unique(),
     title:              text(),
     location:           text(),

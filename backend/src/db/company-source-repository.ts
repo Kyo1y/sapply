@@ -4,6 +4,10 @@ import * as schema from './schema';
 import { companiesTable, companySourcesTable } from './schema';
 import type { CompanySource } from '../types/company';
 
+/**
+ * Returns the Greenhouse career board that has waited longest for a poll.
+ * Unverified and previously failed boards remain eligible for another attempt.
+ */
 export async function findNextGreenhouseSource(
     d1: D1Database,
 ): Promise<CompanySource | undefined> {
@@ -28,6 +32,7 @@ export async function findNextGreenhouseSource(
         .get();
 }
 
+/** Marks a career-board poll as healthy and enables future scheduled polling. */
 export async function recordSuccessfulSourcePoll(
     d1: D1Database,
     source: CompanySource,
@@ -53,6 +58,7 @@ export async function recordSuccessfulSourcePoll(
         .where(eq(companiesTable.id, source.companyId));
 }
 
+/** Records a poll error without disabling a board that worked previously. */
 export async function recordFailedSourcePoll(
     d1: D1Database,
     source: CompanySource,

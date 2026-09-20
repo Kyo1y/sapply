@@ -17,6 +17,7 @@ const LITTLE_EXPERIENCE = /\b(?:0|1)\+?\s+years?\s+(?:of\s+)?(?:professional|ind
 const NO_EXPERIENCE = /\b(?:no (?:prior )?experience (?:is )?required|zero years? of experience)\b/i;
 const GRADUATION_YEAR_TITLE = /\b20(?:26|27)\b/;
 
+/** Returns true only when a timestamp is in the previous 24 hours. */
 export function wasPublishedWithinLastDay(
     timestamp: Date,
     now: Date,
@@ -25,6 +26,10 @@ export function wasPublishedWithinLastDay(
     return age >= 0 && age < ONE_DAY_IN_MILLISECONDS;
 }
 
+/**
+ * Uses list-level fields to decide whether fetching a full job is worthwhile.
+ * This removes stale, nontechnical, and obviously senior roles early.
+ */
 export function isPotentialEarlyCareerJob(
     job: GreenhouseJobSummary,
     now: Date,
@@ -38,6 +43,7 @@ export function isPotentialEarlyCareerJob(
         !HIGHER_LEVEL_TITLE.test(job.title);
 }
 
+/** Checks a full posting for concrete early-career evidence. */
 export function isEarlyCareerJob(job: GreenhouseJob): boolean {
     return EARLY_CAREER_TITLE.test(job.title) ||
         LEVEL_ONE_TITLE.test(job.title) ||

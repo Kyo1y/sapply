@@ -9,6 +9,10 @@ export type SaveDiscoveredJobsResult = {
     updated: number;
 };
 
+/**
+ * Saves jobs found automatically on career boards.
+ * A retry updates the existing row instead of creating a duplicate.
+ */
 export async function saveDiscoveredJobs(
     d1: D1Database,
     jobs: DiscoveredJob[],

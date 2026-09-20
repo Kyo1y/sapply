@@ -6,6 +6,7 @@ import fetchJob from "./fetch-job-posting";
 import * as schema from '../db/schema';
 import type { Job } from "../types/job";
 
+/** Claims one queued job, downloads its HTML, and stores the result or error. */
 export default async function processNext(d1: D1Database): Promise<{ job: Job, jobHtml: string } | undefined> {
     const claimed = await claimOldestJob(d1);
     if (!claimed) {

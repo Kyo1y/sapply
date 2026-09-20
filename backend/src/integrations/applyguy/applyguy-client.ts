@@ -12,10 +12,12 @@ export type ApplyGuyCompanyFeed = {
     rejectedJobs: number;
 };
 
+/** Narrows an unknown JSON value to a plain object. */
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Extracts valid company observations from the untrusted ApplyGuy feed. */
 export function parseApplyGuyCompanyFeed(value: unknown): ApplyGuyCompanyFeed {
     if (!isRecord(value) || !Array.isArray(value.jobs)) {
         throw new Error('ApplyGuy feed does not contain a jobs array');
@@ -50,6 +52,7 @@ export function parseApplyGuyCompanyFeed(value: unknown): ApplyGuyCompanyFeed {
     };
 }
 
+/** Downloads and parses the current ApplyGuy new-grad company feed. */
 export default async function fetchApplyGuyCompanyFeed(
     fetcher: typeof fetch = fetch,
 ): Promise<ApplyGuyCompanyFeed> {

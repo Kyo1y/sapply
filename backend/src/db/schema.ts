@@ -68,7 +68,12 @@ export const companyDiscoveriesTable = sqliteTable("companyDiscoveries", {
 export const jobsTable = sqliteTable("jobs", {
     id:                 text().primaryKey(),
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),
+    companySourceId:    text().references(() => companySourcesTable.id, { onDelete: 'set null' }),
+    externalId:         text(),
     sourceUrl:          text().notNull().unique(),
+    title:              text(),
+    location:           text(),
+    postedAt:           integer({ mode: 'timestamp' }),
     ingestionStatus:    text({ enum: ['queued', 'processing', 'ready', 'failed'] })
                             .notNull()
                             .default('queued'),
@@ -80,4 +85,9 @@ export const jobsTable = sqliteTable("jobs", {
                             .default(sql`(unixepoch())`),
     lastError:          text(),
     postingHtml:        text(),
-});
+}, (table) => [
+    index("jobs_companyId_idx").on(table.companyId),
+    index("jobs_postedAt_idx").on(table.postedAt),
+    uniqueIndex("jobs_companySourceId_externalId_unique")
+        .on(table.companySourceId, table.externalId),
+]);

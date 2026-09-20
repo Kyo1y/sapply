@@ -6,6 +6,7 @@ import { desc } from 'drizzle-orm';
 import claimOldestJob from './jobs/claim-oldest-job';
 import processNext from './jobs/process-next-job';
 import syncApplyGuyCompanies from './workflows/sync-applyguy-companies';
+import discoverNextGreenhouseSource from './workflows/discover-greenhouse-jobs';
 import { listCompanies } from './db/company-repository';
 
 type ImportJobRequest = {
@@ -105,6 +106,18 @@ app.post('/companies/sync/applyguy', async (c) => {
   }
 });
 
+app.post('/discovery/greenhouse/run', async (c) => {
+  try {
+    const discovery = await discoverNextGreenhouseSource(c.env.job_app_db);
+    return discovery
+      ? c.json({ discovery }, 200)
+      : c.body(null, 204);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 502);
+  }
+});
+
 app.post('/jobs/claim-oldest', async (c) => {
   const claimed = await claimOldestJob(c.env.job_app_db);
   return claimed ? c.json({ job: claimed }, 200) : c.body(null, 204);
@@ -114,7 +127,10 @@ app.post('/jobs/claim-oldest', async (c) => {
 const worker = {
   fetch: app.fetch,
   async scheduled(_event, env, _ctx) {
-    await processNext(env.job_app_db)
+    await Promise.all([
+      processNext(env.job_app_db),
+      discoverNextGreenhouseSource(env.job_app_db),
+    ])
   }
 } satisfies ExportedHandler<CloudflareBindings>
 

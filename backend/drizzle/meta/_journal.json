@@ -43,6 +43,13 @@
       "when": 1789864668017,
       "tag": "0005_brave_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790026597506,
+      "tag": "0006_silly_robin_chapel",
+      "breakpoints": true
     }
   ]
 }

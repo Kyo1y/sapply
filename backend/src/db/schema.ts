@@ -46,27 +46,6 @@ export const companySourcesTable = sqliteTable("companySources", {
         .on(table.provider, table.externalKey),
 ]);
 
-/** Records which external feed introduced each company to our registry. */
-export const companyDiscoveriesTable = sqliteTable("companyDiscoveries", {
-    id:                 text().primaryKey(),
-    companyId:          text()
-                            .notNull()
-                            .references(() => companiesTable.id, { onDelete: 'cascade' }),
-    discoverySource:    text({ enum: ['applyguy', 'simplify', 'speedyapply', 'linkedin', 'manual'] })
-                            .notNull(),
-    observedName:       text().notNull(),
-    firstSeenAt:        integer({ mode: 'timestamp' })
-                            .notNull()
-                            .default(sql`(unixepoch())`),
-    lastSeenAt:         integer({ mode: 'timestamp' })
-                            .notNull()
-                            .default(sql`(unixepoch())`),
-}, (table) => [
-    index("companyDiscoveries_companyId_idx").on(table.companyId),
-    uniqueIndex("companyDiscoveries_companyId_source_unique")
-        .on(table.companyId, table.discoverySource),
-]);
-
 export const jobsTable = sqliteTable("jobs", {
     id:                 text().primaryKey(),
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),

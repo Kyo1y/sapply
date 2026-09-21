@@ -1,7 +1,7 @@
 import detectCompanySource from '../companies/detect-company-source';
 import normalizeCompanyName from '../companies/normalize-company-name';
 import {
-    syncDiscoveredCompanies,
+    syncCompanies,
     type CompanySeed,
     type CompanySyncResult,
 } from '../db/company-repository';
@@ -63,12 +63,11 @@ export default async function syncApplyGuyCompanies(
             name: seed.name,
             normalizedName: seed.normalizedName,
             domain: null,
-            discoverySource: 'applyguy',
             detectedSources: Array.from(seed.detectedSources.values()),
         }),
     );
 
-    const result = await syncDiscoveredCompanies(d1, seeds);
+    const result = await syncCompanies(d1, seeds);
 
     return {
         ...result,

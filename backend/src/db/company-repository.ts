@@ -2,7 +2,6 @@ import { asc, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
     companiesTable,
-    companyDiscoveriesTable,
     companySourcesTable,
 } from './schema';
 import * as schema from './schema';
@@ -15,7 +14,6 @@ export type CompanySeed = {
     name: string;
     normalizedName: string;
     domain: string | null;
-    discoverySource: 'applyguy';
     detectedSources: DetectedCompanySource[];
 };
 
@@ -47,10 +45,10 @@ export async function listCompanies(d1: D1Database): Promise<Company[]> {
 }
 
 /**
- * Matches company observations from a feed to the registry, then stores new
- * companies, their official career boards, and the feed that found them.
+ * Matches company observations to the registry, then stores new companies
+ * and their official career boards.
  */
-export async function syncDiscoveredCompanies(
+export async function syncCompanies(
     d1: D1Database,
     seeds: CompanySeed[],
 ): Promise<CompanySyncResult> {
@@ -159,36 +157,6 @@ export async function syncDiscoveredCompanies(
         for (const company of storedCompanies) {
             companyBySeedName.set(company.normalizedName, company);
         }
-    }
-
-    const discoveries = seeds.flatMap((seed) => {
-        const company = companyBySeedName.get(seed.normalizedName);
-
-        if (!company) {
-            return [];
-        }
-
-        return [{
-            id: crypto.randomUUID(),
-            companyId: company.id,
-            discoverySource: seed.discoverySource,
-            observedName: seed.name,
-            firstSeenAt: now,
-            lastSeenAt: now,
-        }];
-    });
-
-    for (const chunk of chunksOf(discoveries, WRITE_CHUNK_SIZE)) {
-        await db
-            .insert(companyDiscoveriesTable)
-            .values(chunk)
-            .onConflictDoUpdate({
-                target: [
-                    companyDiscoveriesTable.companyId,
-                    companyDiscoveriesTable.discoverySource,
-                ],
-                set: { lastSeenAt: now },
-            });
     }
 
     const detectedSources = seeds.flatMap((seed) => {

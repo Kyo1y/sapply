@@ -36,6 +36,34 @@
       "when": 1789851903895,
       "tag": "0004_nasty_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789864668017,
+      "tag": "0005_brave_colossus",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790026597506,
+      "tag": "0006_silly_robin_chapel",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790046610241,
+      "tag": "0007_job-status-lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790101812782,
+      "tag": "0008_naive_white_queen",
+      "breakpoints": true
     }
   ]
 }

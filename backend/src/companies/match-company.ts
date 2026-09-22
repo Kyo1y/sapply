@@ -38,14 +38,17 @@ const LEGAL_SUFFIXES = new Set([
 const MIN_FUZZY_SCORE = 0.88;
 const MIN_FUZZY_LEAD = 0.08;
 
+/** Builds the stable provider-and-board key used to compare career boards. */
 function sourceKey(source: DetectedCompanySource): string {
     return `${source.provider}:${source.externalKey}`;
 }
 
+/** Removes casing and a leading "www" before comparing company domains. */
 function normalizedDomain(domain: string): string {
     return domain.trim().toLocaleLowerCase('en-US').replace(/^www\./, '');
 }
 
+/** Removes punctuation and legal suffixes such as LLC from a company name. */
 export function legalNameFingerprint(normalizedName: string): string {
     const words = normalizedName
         .replace(/[^\p{L}\p{N}]+/gu, ' ')
@@ -60,6 +63,7 @@ export function legalNameFingerprint(normalizedName: string): string {
     return words.join(' ');
 }
 
+/** Counts the single-character edits needed to turn one name into another. */
 function editDistance(left: string, right: string): number {
     if (left.length === 0) {
         return right.length;
@@ -92,6 +96,7 @@ function editDistance(left: string, right: string): number {
     return previous[right.length];
 }
 
+/** Returns a name-similarity score from 0 to 1. */
 export function nameSimilarity(left: string, right: string): number {
     const longestLength = Math.max(left.length, right.length);
 
@@ -102,12 +107,17 @@ export function nameSimilarity(left: string, right: string): number {
     return 1 - editDistance(left, right) / longestLength;
 }
 
+/** Returns a match only when the evidence points to exactly one company. */
 function oneCandidate(
     candidates: CompanyMatchCandidate[],
 ): CompanyMatchCandidate | null {
     return candidates.length === 1 ? candidates[0] : null;
 }
 
+/**
+ * Finds an existing company using career board, domain, and name evidence.
+ * Returns unmatched when fuzzy evidence is too weak or ambiguous.
+ */
 export default function matchCompany(
     input: CompanyMatchInput,
     candidates: CompanyMatchCandidate[],

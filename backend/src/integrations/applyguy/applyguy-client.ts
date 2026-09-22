@@ -1,69 +1,133 @@
+import type { JobCandidate } from '../../types/job-candidate';
+import { getAshbyJobCandidateFromUrl } from '../ashby/ashby-client';
+import { getGreenhouseJobCandidateFromUrl } from '../greenhouse/greenhouse-client';
+import { getLeverJobCandidateFromUrl } from '../lever/lever-client';
+import { fetchJson, httpUrl, optionalText, record, requiredText } from '../provider-fields';
+
 const APPLYGUY_FEED_URL =
     'https://raw.githubusercontent.com/ApplyGuy/2027-New-Grad-Jobs/main/data/new-grad-jobs.json';
+const APPLYGUY_API_ROOT = 'https://api.applyguy.ai/v1/jobs';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export type ApplyGuyCompanyObservation = {
-    name: string;
-    listingUrl: string | null;
+type ApplyGuyFeedJob = {
+    id: string;
+    companyName: string;
+    title: string;
+    location: string | null;
+    listingUrl: string;
+    posted: string;
 };
 
-export type ApplyGuyCompanyFeed = {
-    updatedAt: string | null;
-    observations: ApplyGuyCompanyObservation[];
-    rejectedJobs: number;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function parseApplyGuyCompanyFeed(value: unknown): ApplyGuyCompanyFeed {
-    if (!isRecord(value) || !Array.isArray(value.jobs)) {
-        throw new Error('ApplyGuy feed does not contain a jobs array');
+/** Validates one public ApplyGuy feed entry. */
+function parseApplyGuyFeedJob(value: unknown): ApplyGuyFeedJob {
+    const job = record(value, 'ApplyGuy job');
+    const posted = requiredText(job.posted, 'ApplyGuy posted');
+    const midnight = /^\d{4}-\d{2}-\d{2}$/.test(posted)
+        ? new Date(`${posted}T00:00:00Z`)
+        : new Date(NaN);
+    if (Number.isNaN(midnight.getTime()) || midnight.toISOString().slice(0, 10) !== posted) {
+        throw new Error('ApplyGuy posted must be a calendar date');
     }
-
-    const observations: ApplyGuyCompanyObservation[] = [];
-    let rejectedJobs = 0;
-
-    for (const job of value.jobs) {
-        if (!isRecord(job) || typeof job.company !== 'string') {
-            rejectedJobs += 1;
-            continue;
-        }
-
-        const name = job.company.trim();
-
-        if (name.length === 0) {
-            rejectedJobs += 1;
-            continue;
-        }
-
-        observations.push({
-            name,
-            listingUrl: typeof job.listingUrl === 'string' ? job.listingUrl : null,
-        });
-    }
-
     return {
-        updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null,
-        observations,
-        rejectedJobs,
+        id: requiredText(job.id, 'ApplyGuy id'),
+        companyName: requiredText(job.company, 'ApplyGuy company'),
+        title: requiredText(job.title, 'ApplyGuy title'),
+        location: optionalText(job.location),
+        listingUrl: httpUrl(job.listingUrl, 'ApplyGuy listingUrl'),
+        posted,
     };
 }
 
-export default async function fetchApplyGuyCompanyFeed(
-    fetcher: typeof fetch = fetch,
-): Promise<ApplyGuyCompanyFeed> {
-    const response = await fetcher(APPLYGUY_FEED_URL, {
+/** Fetches an unsupported ATS posting from ApplyGuy's paid detail API. */
+async function getApplyGuyJobCandidate(
+    job: ApplyGuyFeedJob,
+    apiKey: string,
+    fetcher: typeof fetch,
+): Promise<JobCandidate> {
+    if (!UUID.test(job.id)) {
+        return {
+            provider: 'applyguy',
+            externalId: job.id,
+            companyName: job.companyName,
+            title: job.title,
+            location: job.location,
+            sourceUrl: job.listingUrl,
+            applyUrl: job.listingUrl,
+            descriptionHtml: null,
+            salaryText: null,
+            postingTime: { kind: 'calendar-date', date: job.posted },
+        };
+    }
+    if (!apiKey.trim()) throw new Error('APPLYGUY_API_KEY is required');
+    const response = await fetcher(`${APPLYGUY_API_ROOT}/${job.id}`, {
         headers: {
             accept: 'application/json',
-            'user-agent': 'sapply-company-registry',
+            authorization: `Bearer ${apiKey}`,
         },
     });
+    if (!response.ok) throw new Error(`ApplyGuy detail returned HTTP ${response.status}`);
+    const body = record(await response.json(), 'ApplyGuy detail response');
+    const detail = record(body.data, 'ApplyGuy detail');
+    const id = requiredText(detail.id, 'ApplyGuy detail id');
+    if (id !== job.id) throw new Error(`ApplyGuy detail ID does not match job ${job.id}`);
 
-    if (!response.ok) {
-        throw new Error(`ApplyGuy feed returned HTTP ${response.status}`);
+    const salaryMin = typeof detail.salaryMin === 'number' ? detail.salaryMin : null;
+    const salaryMax = typeof detail.salaryMax === 'number' ? detail.salaryMax : null;
+    const salaryCurrency = optionalText(detail.salaryCurrency) ?? '';
+    const salaryText = salaryMin !== null || salaryMax !== null
+        ? `${salaryCurrency} ${salaryMin ?? ''}${salaryMin !== null && salaryMax !== null ? '–' : ''}${salaryMax ?? ''}`.trim()
+        : null;
+
+    return {
+        provider: 'applyguy',
+        externalId: id,
+        companyName: requiredText(detail.company, 'ApplyGuy detail company'),
+        title: requiredText(detail.title, 'ApplyGuy detail title'),
+        location: optionalText(detail.location) ?? job.location,
+        sourceUrl: job.listingUrl,
+        applyUrl: httpUrl(detail.url, 'ApplyGuy detail URL'),
+        descriptionHtml: optionalText(detail.descriptionHtml),
+        salaryText,
+        postingTime: { kind: 'calendar-date', date: job.posted },
+    };
+}
+
+/** Resolves one feed entry through its ATS client or ApplyGuy's paid detail API. */
+export async function parseApplyGuyJob(
+    value: unknown,
+    apiKey: string,
+    fetcher: typeof fetch = fetch,
+): Promise<JobCandidate> {
+    const job = parseApplyGuyFeedJob(value);
+    const hostname = new URL(job.listingUrl).hostname;
+    if (
+        hostname === 'boards.greenhouse.io' ||
+        hostname === 'job-boards.greenhouse.io'
+    ) {
+        return getGreenhouseJobCandidateFromUrl(
+            job.listingUrl,
+            job.companyName,
+            job.posted,
+            fetcher,
+        );
     }
+    if (hostname === 'jobs.lever.co' || hostname === 'jobs.eu.lever.co') {
+        return getLeverJobCandidateFromUrl(job.listingUrl, job.companyName, fetcher);
+    }
+    if (hostname === 'jobs.ashbyhq.com') {
+        return getAshbyJobCandidateFromUrl(job.listingUrl, job.companyName, fetcher);
+    }
+    return getApplyGuyJobCandidate(job, apiKey, fetcher);
+}
 
-    const body: unknown = await response.json();
-    return parseApplyGuyCompanyFeed(body);
+/** Fetches the public new-grad feed and fully resolves each job posting. */
+export async function listApplyGuyJobCandidates(
+    apiKey: string,
+    fetcher: typeof fetch = fetch,
+): Promise<JobCandidate[]> {
+    const body = record(await fetchJson(APPLYGUY_FEED_URL, 'ApplyGuy', fetcher), 'ApplyGuy feed');
+    if (!Array.isArray(body.jobs)) throw new Error('ApplyGuy feed does not contain a jobs array');
+    const candidates: JobCandidate[] = [];
+    for (const job of body.jobs) candidates.push(await parseApplyGuyJob(job, apiKey, fetcher));
+    return candidates;
 }

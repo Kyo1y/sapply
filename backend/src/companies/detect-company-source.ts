@@ -1,9 +1,11 @@
 import type { DetectedCompanySource } from '../types/company';
 
+/** Splits a URL path into its nonempty parts. */
 function pathSegments(url: URL): string[] {
     return url.pathname.split('/').filter((segment) => segment.length > 0);
 }
 
+/** Recognizes supported ATS URLs and extracts their company-board identifier. */
 export default function detectCompanySource(
     value: string,
 ): DetectedCompanySource | null {

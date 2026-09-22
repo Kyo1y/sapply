@@ -2,7 +2,6 @@ import { asc, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
     companiesTable,
-    companyDiscoveriesTable,
     companySourcesTable,
 } from './schema';
 import * as schema from './schema';
@@ -15,7 +14,6 @@ export type CompanySeed = {
     name: string;
     normalizedName: string;
     domain: string | null;
-    discoverySource: 'applyguy';
     detectedSources: DetectedCompanySource[];
 };
 
@@ -29,6 +27,7 @@ export type CompanySyncResult = {
 const WRITE_CHUNK_SIZE = 10;
 const READ_CHUNK_SIZE = 50;
 
+/** Splits large database operations into smaller D1 requests. */
 function chunksOf<T>(items: T[], size: number): T[][] {
     const chunks: T[][] = [];
 
@@ -39,12 +38,17 @@ function chunksOf<T>(items: T[], size: number): T[][] {
     return chunks;
 }
 
+/** Returns every registered company in alphabetical order. */
 export async function listCompanies(d1: D1Database): Promise<Company[]> {
     const db = drizzle(d1, { schema });
     return db.select().from(companiesTable).orderBy(asc(companiesTable.name));
 }
 
-export async function syncDiscoveredCompanies(
+/**
+ * Matches company observations to the registry, then stores new companies
+ * and their official career boards.
+ */
+export async function syncCompanies(
     d1: D1Database,
     seeds: CompanySeed[],
 ): Promise<CompanySyncResult> {
@@ -153,36 +157,6 @@ export async function syncDiscoveredCompanies(
         for (const company of storedCompanies) {
             companyBySeedName.set(company.normalizedName, company);
         }
-    }
-
-    const discoveries = seeds.flatMap((seed) => {
-        const company = companyBySeedName.get(seed.normalizedName);
-
-        if (!company) {
-            return [];
-        }
-
-        return [{
-            id: crypto.randomUUID(),
-            companyId: company.id,
-            discoverySource: seed.discoverySource,
-            observedName: seed.name,
-            firstSeenAt: now,
-            lastSeenAt: now,
-        }];
-    });
-
-    for (const chunk of chunksOf(discoveries, WRITE_CHUNK_SIZE)) {
-        await db
-            .insert(companyDiscoveriesTable)
-            .values(chunk)
-            .onConflictDoUpdate({
-                target: [
-                    companyDiscoveriesTable.companyId,
-                    companyDiscoveriesTable.discoverySource,
-                ],
-                set: { lastSeenAt: now },
-            });
     }
 
     const detectedSources = seeds.flatMap((seed) => {

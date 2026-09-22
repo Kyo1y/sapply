@@ -1,165 +1,135 @@
+import { isPotentialEarlyCareerTitle } from '../../jobs/early-career-policy';
+import type { JobCandidate } from '../../types/job-candidate';
+import { fetchJson, httpUrl, optionalText, record, requiredText, timestamp } from '../provider-fields';
+
 const GREENHOUSE_API_ROOT = 'https://boards-api.greenhouse.io/v1/boards';
 
-export type GreenhouseJobSummary = {
+export type GreenhouseJobCard = {
     id: number;
     title: string;
     updatedAt: Date;
 };
 
-export type GreenhouseJob = {
-    id: number;
-    title: string;
-    location: string | null;
-    sourceUrl: string;
-    postedAt: Date;
-    postingHtml: string;
-};
-
-/** Narrows an unknown JSON value to a plain object. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Parses and validates a timestamp from a Greenhouse response. */
-function parseDate(value: unknown, field: string): Date {
-    if (typeof value !== 'string') {
-        throw new Error(`Greenhouse ${field} must be a timestamp`);
-    }
-
-    const milliseconds = Date.parse(value);
-
-    if (Number.isNaN(milliseconds)) {
-        throw new Error(`Greenhouse ${field} is not a valid timestamp`);
-    }
-
-    return new Date(milliseconds);
-}
-
-/** Parses and validates Greenhouse's numeric job-post identifier. */
-function parseJobId(value: unknown): number {
-    if (
-        typeof value !== 'number' ||
-        !Number.isSafeInteger(value) ||
-        value <= 0
-    ) {
-        throw new Error('Greenhouse job id must be a positive integer');
-    }
-
-    return value;
-}
-
-/** Parses a required job title and removes surrounding whitespace. */
-function parseTitle(value: unknown): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-        throw new Error('Greenhouse job title must be a non-empty string');
-    }
-
-    return value.trim();
-}
-
-/** Parses an HTTP application URL from a Greenhouse response. */
-function parseHttpUrl(value: unknown): string {
-    if (typeof value !== 'string') {
-        throw new Error('Greenhouse absolute_url must be a URL');
-    }
-
-    let url: URL;
-
-    try {
-        url = new URL(value);
-    } catch {
-        throw new Error('Greenhouse absolute_url must be a URL');
-    }
-
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-        throw new Error('Greenhouse absolute_url must use HTTP or HTTPS');
-    }
-
-    return url.toString();
-}
-
-/** Returns the location name when Greenhouse supplies one. */
-function parseLocation(value: unknown): string | null {
-    if (!isRecord(value) || typeof value.name !== 'string') {
-        return null;
-    }
-
-    const location = value.name.trim();
-    return location.length > 0 ? location : null;
-}
-
-/** Converts the untrusted list response into job summaries we can use safely. */
-export function parseGreenhouseJobList(value: unknown): GreenhouseJobSummary[] {
-    if (!isRecord(value) || !Array.isArray(value.jobs)) {
-        throw new Error('Greenhouse job list does not contain a jobs array');
-    }
-
-    return value.jobs.map((job) => {
-        if (!isRecord(job)) {
-            throw new Error('Greenhouse job list contains an invalid job');
+/** Reads the brief postings returned by a Greenhouse board. */
+export function parseGreenhouseJobCards(value: unknown): GreenhouseJobCard[] {
+    const body = record(value, 'Greenhouse response');
+    if (!Array.isArray(body.jobs)) throw new Error('Greenhouse job list does not contain a jobs array');
+    return body.jobs.map((value) => {
+        const job = record(value, 'Greenhouse job card');
+        if (typeof job.id !== 'number' || !Number.isSafeInteger(job.id) || job.id <= 0) {
+            throw new Error('Greenhouse job id must be a positive integer');
         }
-
         return {
-            id: parseJobId(job.id),
-            title: parseTitle(job.title),
-            updatedAt: parseDate(job.updated_at, 'updated_at'),
+            id: job.id,
+            title: requiredText(job.title, 'Greenhouse title'),
+            updatedAt: timestamp(job.updated_at, 'Greenhouse updated_at'),
         };
     });
 }
 
-/** Converts one untrusted detail response into a complete Greenhouse job. */
-export function parseGreenhouseJob(value: unknown): GreenhouseJob {
-    if (!isRecord(value)) {
-        throw new Error('Greenhouse job response must be an object');
-    }
+/** Fetches board cards for title-based pre-filtering. */
+export async function listGreenhouseJobCards(
+    boardToken: string,
+    fetcher: typeof fetch = fetch,
+): Promise<GreenhouseJobCard[]> {
+    const url = `${GREENHOUSE_API_ROOT}/${encodeURIComponent(boardToken)}/jobs`;
+    return parseGreenhouseJobCards(await fetchJson(url, 'Greenhouse', fetcher));
+}
 
-    if (typeof value.content !== 'string') {
-        throw new Error('Greenhouse job content must be a string');
-    }
+/** Fetches one full posting and maps it to the shared job shape. */
+export async function getGreenhouseJobCandidate(
+    boardToken: string,
+    companyName: string,
+    card: GreenhouseJobCard,
+    fetcher: typeof fetch = fetch,
+): Promise<JobCandidate> {
+    return fetchGreenhouseJobCandidate(
+        GREENHOUSE_API_ROOT,
+        boardToken,
+        companyName,
+        card.id,
+        { kind: 'timestamp', at: card.updatedAt },
+        fetcher,
+    );
+}
 
+/** Fetches one Greenhouse posting identified by an employer listing URL. */
+export async function getGreenhouseJobCandidateFromUrl(
+    sourceUrl: string,
+    companyName: string,
+    postingDate: string,
+    fetcher: typeof fetch = fetch,
+): Promise<JobCandidate> {
+    const url = new URL(sourceUrl);
+    const supportedHosts = new Set([
+        'boards.greenhouse.io',
+        'job-boards.greenhouse.io',
+    ]);
+    if (!supportedHosts.has(url.hostname)) throw new Error('Unsupported Greenhouse listing URL');
+    const segments = url.pathname.split('/').filter(Boolean);
+    const jobsIndex = segments.indexOf('jobs');
+    const boardToken = segments[0];
+    const idText = jobsIndex >= 0 ? segments[jobsIndex + 1] : undefined;
+    const id = idText && /^\d+$/.test(idText) ? Number(idText) : NaN;
+    if (!boardToken || !Number.isSafeInteger(id) || id <= 0) {
+        throw new Error('Greenhouse listing URL must contain a board and job ID');
+    }
+    return fetchGreenhouseJobCandidate(
+        GREENHOUSE_API_ROOT,
+        boardToken,
+        companyName,
+        id,
+        { kind: 'calendar-date', date: postingDate },
+        fetcher,
+    );
+}
+
+async function fetchGreenhouseJobCandidate(
+    apiRoot: string,
+    boardToken: string,
+    companyName: string,
+    jobId: number,
+    postingTime: JobCandidate['postingTime'],
+    fetcher: typeof fetch,
+): Promise<JobCandidate> {
+    const url = `${apiRoot}/${encodeURIComponent(boardToken)}/jobs/${jobId}?pay_transparency=true`;
+    const body = record(await fetchJson(url, 'Greenhouse', fetcher), 'Greenhouse job');
+    if (body.id !== jobId) throw new Error(`Greenhouse detail ID does not match job ${jobId}`);
+    if (typeof body.content !== 'string') throw new Error('Greenhouse content must be a string');
+    const location = body.location == null ? null : record(body.location, 'Greenhouse location');
+    const ranges = Array.isArray(body.pay_input_ranges) ? body.pay_input_ranges : [];
+    const salaryText = ranges.flatMap((value) => {
+        const range = record(value, 'Greenhouse pay range');
+        if (typeof range.min_cents !== 'number' || typeof range.max_cents !== 'number') return [];
+        const title = optionalText(range.title);
+        const currency = optionalText(range.currency_type) ?? '';
+        return [`${title ? `${title}: ` : ''}${currency} ${range.min_cents / 100}–${range.max_cents / 100}`.trim()];
+    }).join('; ');
+    const sourceUrl = httpUrl(body.absolute_url, 'Greenhouse absolute_url');
     return {
-        id: parseJobId(value.id),
-        title: parseTitle(value.title),
-        location: parseLocation(value.location),
-        sourceUrl: parseHttpUrl(value.absolute_url),
-        postedAt: parseDate(value.first_published, 'first_published'),
-        postingHtml: value.content,
+        provider: 'greenhouse',
+        externalId: String(jobId),
+        companyName,
+        title: requiredText(body.title, 'Greenhouse title'),
+        location: location ? optionalText(location.name) : null,
+        sourceUrl,
+        applyUrl: sourceUrl,
+        descriptionHtml: body.content,
+        salaryText: salaryText || null,
+        postingTime,
     };
 }
 
-/** Fetches JSON from Greenhouse and rejects unsuccessful HTTP responses. */
-async function getJson(
-    url: string,
-    fetcher: typeof fetch,
-): Promise<unknown> {
-    const response = await fetcher(url, {
-        headers: { accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Greenhouse returned HTTP ${response.status}`);
+/** Pre-filters board cards by title, then loads full details for the survivors. */
+export async function listGreenhouseJobCandidates(
+    boardToken: string,
+    companyName: string,
+    fetcher: typeof fetch = fetch,
+): Promise<JobCandidate[]> {
+    const cards = await listGreenhouseJobCards(boardToken, fetcher);
+    const candidates: JobCandidate[] = [];
+    for (const card of cards.filter((card) => isPotentialEarlyCareerTitle(card.title))) {
+        candidates.push(await getGreenhouseJobCandidate(boardToken, companyName, card, fetcher));
     }
-
-    return response.json();
-}
-
-/** Fetches every published job summary for one Greenhouse career board. */
-export async function listGreenhouseJobs(
-    boardToken: string,
-    fetcher: typeof fetch = fetch,
-): Promise<GreenhouseJobSummary[]> {
-    const url = `${GREENHOUSE_API_ROOT}/${encodeURIComponent(boardToken)}/jobs`;
-    const body = await getJson(url, fetcher);
-    return parseGreenhouseJobList(body);
-}
-
-/** Fetches one full Greenhouse job, including its employer publication time. */
-export async function getGreenhouseJob(
-    boardToken: string,
-    jobId: number,
-    fetcher: typeof fetch = fetch,
-): Promise<GreenhouseJob> {
-    const url = `${GREENHOUSE_API_ROOT}/${encodeURIComponent(boardToken)}/jobs/${jobId}`;
-    const body = await getJson(url, fetcher);
-    return parseGreenhouseJob(body);
+    return candidates;
 }

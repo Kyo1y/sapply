@@ -50,13 +50,26 @@ export const jobsTable = sqliteTable("jobs", {
     id:                 text().primaryKey(),
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),
     companySourceId:    text().references(() => companySourcesTable.id, { onDelete: 'set null' }),
+    provider:           text({ enum: [
+                            'manual', 'greenhouse', 'lever', 'ashby', 'linkedin', 'applyguy',
+                        ] })
+                            .notNull()
+                            .default('manual'),
     externalId:         text(),
+    companyName:        text(),
     // The official application page for this job.
     sourceUrl:          text().notNull().unique(),
+    applyUrl:           text(),
     title:              text(),
     location:           text(),
     postedAt:           integer({ mode: 'timestamp' }),
-    ingestionStatus:    text({ enum: ['queued', 'processing', 'ready', 'failed'] })
+    displayedAge:       text(),
+    salaryText:         text(),
+    // Processing begins once posting HTML is available; later states track review and outreach.
+    status:             text({ enum: [
+                            'queued', 'fetching', 'processing',
+                            'assessing', 'preparing', 'pending', 'not_fit', 'failed',
+                        ] })
                             .notNull()
                             .default('queued'),
     createdAt:          integer({ mode: 'timestamp' })
@@ -72,4 +85,6 @@ export const jobsTable = sqliteTable("jobs", {
     index("jobs_postedAt_idx").on(table.postedAt),
     uniqueIndex("jobs_companySourceId_externalId_unique")
         .on(table.companySourceId, table.externalId),
+    uniqueIndex("jobs_provider_externalId_unique")
+        .on(table.provider, table.externalId),
 ]);

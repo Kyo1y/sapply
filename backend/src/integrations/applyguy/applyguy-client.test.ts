@@ -1,35 +1,106 @@
-import { describe, expect, it } from 'vitest';
-import { parseApplyGuyCompanyFeed } from './applyguy-client';
+import { describe, expect, it, vi } from 'vitest';
+import { listApplyGuyJobCandidates, parseApplyGuyJob } from './applyguy-client';
 
-describe('parseApplyGuyCompanyFeed', () => {
-    it('parses valid company observations and counts rejected jobs', () => {
-        const result = parseApplyGuyCompanyFeed({
-            updatedAt: '2026-09-19T19:15:37.556Z',
-            jobs: [
-                {
-                    company: 'Together AI',
-                    listingUrl: 'https://job-boards.greenhouse.io/togetherai/jobs/1',
-                },
-                { company: 'Microsoft' },
-                { title: 'Missing company' },
-            ],
-        });
+const job = {
+    id: 'custom:microsoft:872b1461dd8af2bce47d',
+    company: 'Microsoft',
+    title: 'Software Engineering IC2',
+    location: 'Redmond, WA',
+    posted: '2026-09-22',
+    age: 'Today',
+    url: 'https://applyguy.ai/jobs?job=example',
+    listingUrl: 'https://apply.careers.microsoft.com/careers/job/1970393556962504',
+};
 
-        expect(result).toEqual({
-            updatedAt: '2026-09-19T19:15:37.556Z',
-            observations: [
-                {
-                    name: 'Together AI',
-                    listingUrl: 'https://job-boards.greenhouse.io/togetherai/jobs/1',
-                },
-                { name: 'Microsoft', listingUrl: null },
-            ],
-            rejectedJobs: 1,
+describe('ApplyGuy job candidates', () => {
+    it('keeps free-feed data for custom IDs that the paid API cannot accept', async () => {
+        expect(await parseApplyGuyJob(job, 'test-key')).toEqual({
+            provider: 'applyguy',
+            externalId: job.id,
+            companyName: 'Microsoft',
+            title: 'Software Engineering IC2',
+            location: 'Redmond, WA',
+            sourceUrl: job.listingUrl,
+            applyUrl: job.listingUrl,
+            descriptionHtml: null,
+            salaryText: null,
+            postingTime: { kind: 'calendar-date', date: '2026-09-22' },
         });
     });
 
-    it('rejects a payload without a jobs array', () => {
-        expect(() => parseApplyGuyCompanyFeed({ jobs: null }))
-            .toThrow('ApplyGuy feed does not contain a jobs array');
+    it('fetches and maps the public feed', async () => {
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({
+            updatedAt: '2026-09-22T16:45:58.630Z',
+            jobs: [job],
+        }))) as unknown as typeof fetch;
+        const candidates = await listApplyGuyJobCandidates('test-key', fetcher);
+        expect(candidates).toHaveLength(1);
+        expect(candidates[0].externalId).toBe(job.id);
+        expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('data/new-grad-jobs.json');
+    });
+
+    it('rejects malformed dates and feeds', async () => {
+        await expect(parseApplyGuyJob({ ...job, posted: '2026-02-30' }, 'test-key'))
+            .rejects.toThrow('ApplyGuy posted must be a calendar date');
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ jobs: null }))) as unknown as typeof fetch;
+        await expect(listApplyGuyJobCandidates('test-key', fetcher))
+            .rejects.toThrow('ApplyGuy feed does not contain a jobs array');
+    });
+
+    it('uses the paid detail API for unsupported ATS URLs', async () => {
+        const apiJob = {
+            ...job,
+            id: '85bb4a2a-df45-40ff-ada3-87d6fd7b413f',
+            company: 'Boeing',
+            listingUrl: 'https://boeing.wd1.myworkdayjobs.com/site/job/example',
+        };
+        const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            expect(new Headers(init?.headers).get('authorization')).toBe('Bearer paid-key');
+            return new Response(JSON.stringify({
+                data: {
+                    id: apiJob.id,
+                    company: 'Boeing',
+                    title: apiJob.title,
+                    location: 'Seattle, WA',
+                    url: apiJob.listingUrl,
+                    descriptionHtml: '<p>Build software.</p>',
+                    salaryMin: 100000,
+                    salaryMax: 120000,
+                    salaryCurrency: 'USD',
+                },
+            }));
+        }) as unknown as typeof fetch;
+
+        const candidate = await parseApplyGuyJob(apiJob, 'paid-key', fetcher);
+
+        expect(candidate.provider).toBe('applyguy');
+        expect(candidate.descriptionHtml).toBe('<p>Build software.</p>');
+        expect(candidate.salaryText).toBe('USD 100000–120000');
+        expect(candidate.postingTime).toEqual({ kind: 'calendar-date', date: apiJob.posted });
+        expect(vi.mocked(fetcher).mock.calls[0][0]).toContain(`/v1/jobs/${apiJob.id}`);
+    });
+
+    it('routes supported Greenhouse URLs through the Greenhouse client', async () => {
+        const greenhouseJob = {
+            ...job,
+            id: 'applyguy-id',
+            company: 'Example',
+            listingUrl: 'https://job-boards.greenhouse.io/example/jobs/123',
+        };
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({
+            id: 123,
+            title: greenhouseJob.title,
+            absolute_url: greenhouseJob.listingUrl,
+            location: { name: greenhouseJob.location },
+            content: '<p>Greenhouse description</p>',
+            pay_input_ranges: [],
+        }))) as unknown as typeof fetch;
+
+        const candidate = await parseApplyGuyJob(greenhouseJob, 'unused-key', fetcher);
+
+        expect(candidate.provider).toBe('greenhouse');
+        expect(candidate.descriptionHtml).toBe('<p>Greenhouse description</p>');
+        expect(candidate.postingTime).toEqual({ kind: 'calendar-date', date: greenhouseJob.posted });
+        expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('/v1/boards/example/jobs/123');
     });
 });

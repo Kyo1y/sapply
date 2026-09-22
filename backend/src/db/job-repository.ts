@@ -1,34 +1,62 @@
-import { and, eq, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
+import type { FilteredJobCandidates } from '../jobs/filter-job-candidates';
+import type { JobCandidate } from '../types/job-candidate';
 import * as schema from './schema';
 import { jobsTable } from './schema';
-import type { DiscoveredJob } from '../types/job';
 
-export type SaveDiscoveredJobsResult = {
+export type SaveFilteredJobCandidatesResult = {
+    accepted: number;
     created: number;
-    updated: number;
+    duplicates: number;
+    rejected: number;
 };
 
-/**
- * Saves jobs found automatically on career boards.
- * A retry updates the existing row instead of creating a duplicate.
- */
-export async function saveDiscoveredJobs(
+function postingFields(postingTime: JobCandidate['postingTime']): {
+    postedAt: Date | null;
+    displayedAge: string | null;
+} {
+    switch (postingTime.kind) {
+        case 'timestamp':
+            return { postedAt: postingTime.at, displayedAge: null };
+        case 'calendar-date':
+            return {
+                postedAt: new Date(`${postingTime.date}T00:00:00Z`),
+                displayedAge: null,
+            };
+        case 'recent-window':
+            return { postedAt: null, displayedAge: postingTime.displayedAge };
+        default: {
+            const unhandled: never = postingTime;
+            return unhandled;
+        }
+    }
+}
+
+/** Inserts accepted candidates once and never changes existing jobs or rejected candidates. */
+export async function saveFilteredJobCandidates(
     d1: D1Database,
-    jobs: DiscoveredJob[],
-    savedAt: Date,
-): Promise<SaveDiscoveredJobsResult> {
+    filtered: FilteredJobCandidates,
+    savedAt: Date = new Date(),
+): Promise<SaveFilteredJobCandidatesResult> {
     const db = drizzle(d1, { schema });
     let created = 0;
-    let updated = 0;
 
-    for (const job of jobs) {
+    for (const candidate of filtered.accepted) {
         const inserted = await db
             .insert(jobsTable)
             .values({
                 id: crypto.randomUUID(),
-                ...job,
-                ingestionStatus: 'ready',
+                provider: candidate.provider,
+                externalId: candidate.externalId,
+                companyName: candidate.companyName,
+                sourceUrl: candidate.sourceUrl,
+                applyUrl: candidate.applyUrl,
+                title: candidate.title,
+                location: candidate.location,
+                ...postingFields(candidate.postingTime),
+                salaryText: candidate.salaryText,
+                postingHtml: candidate.descriptionHtml,
+                status: 'assessing',
                 createdAt: savedAt,
                 updatedAt: savedAt,
             })
@@ -36,40 +64,13 @@ export async function saveDiscoveredJobs(
             .returning({ id: jobsTable.id })
             .get();
 
-        if (inserted) {
-            created += 1;
-            continue;
-        }
-
-        const existing = await db
-            .select({ id: jobsTable.id })
-            .from(jobsTable)
-            .where(or(
-                eq(jobsTable.sourceUrl, job.sourceUrl),
-                and(
-                    eq(jobsTable.companySourceId, job.companySourceId),
-                    eq(jobsTable.externalId, job.externalId),
-                ),
-            ))
-            .limit(1)
-            .get();
-
-        if (!existing) {
-            continue;
-        }
-
-        await db
-            .update(jobsTable)
-            .set({
-                ...job,
-                ingestionStatus: 'ready',
-                lastError: null,
-                updatedAt: savedAt,
-            })
-            .where(eq(jobsTable.id, existing.id));
-
-        updated += 1;
+        if (inserted) created += 1;
     }
 
-    return { created, updated };
+    return {
+        accepted: filtered.accepted.length,
+        created,
+        duplicates: filtered.accepted.length - created,
+        rejected: filtered.rejected.length,
+    };
 }

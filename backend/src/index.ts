@@ -3,10 +3,6 @@ import { drizzle } from 'drizzle-orm/d1';
 import { jobsTable } from './db/schema';
 import * as schema from './db/schema';
 import { desc } from 'drizzle-orm';
-import claimOldestJob from './jobs/claim-oldest-job';
-import processNext from './jobs/process-next-job';
-import syncApplyGuyCompanies from './workflows/sync-applyguy-companies';
-import discoverNextGreenhouseSource from './workflows/discover-greenhouse-jobs';
 import { listCompanies } from './db/company-repository';
 
 type ImportJobRequest = {
@@ -39,10 +35,6 @@ function parseHttpUrl(value: string): URL | null {
     return null
   }
 }
-
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-});
 
 app.post('/jobs/import', async (c) => {
   const db = drizzle(c.env.job_app_db, { schema });
@@ -98,42 +90,8 @@ app.get('/companies', async (c) => {
   return c.json({ companies }, 200);
 });
 
-app.post('/companies/sync/applyguy', async (c) => {
-  try {
-    const sync = await syncApplyGuyCompanies(c.env.job_app_db);
-    return c.json({ sync }, 200);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 502);
-  }
-});
-
-app.post('/discovery/greenhouse/run', async (c) => {
-  try {
-    const discovery = await discoverNextGreenhouseSource(c.env.job_app_db);
-    return discovery
-      ? c.json({ discovery }, 200)
-      : c.body(null, 204);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 502);
-  }
-});
-
-app.post('/jobs/claim-oldest', async (c) => {
-  const claimed = await claimOldestJob(c.env.job_app_db);
-  return claimed ? c.json({ job: claimed }, 200) : c.body(null, 204);
-})
-
-
 const worker = {
   fetch: app.fetch,
-  async scheduled(_event, env, _ctx) {
-    await Promise.all([
-      processNext(env.job_app_db),
-      discoverNextGreenhouseSource(env.job_app_db),
-    ])
-  }
 } satisfies ExportedHandler<CloudflareBindings>
 
 export default worker

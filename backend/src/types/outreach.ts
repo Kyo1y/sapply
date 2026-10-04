@@ -1,7 +1,11 @@
 import { z } from 'zod';
+import type { emailDraftsTable } from '../db/schema';
 import type { CandidateProfile } from './candidate-profile';
 import type { Job } from './job';
 import type { RecruiterCandidate, RecruiterScore } from './recruiter';
+
+/** The original email, research, and optional user edits saved for a job and recruiter. */
+export type EmailDraft = typeof emailDraftsTable.$inferSelect;
 
 /** The selected recruiter's contact details and scores, plus facts for drafting. */
 export type OutreachContext = {

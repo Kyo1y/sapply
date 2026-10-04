@@ -1,6 +1,9 @@
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import type { FilteredJobCandidates } from '../jobs/filter-job-candidates';
+import type { JobAssessment } from '../types/job-assessment';
 import type { JobCandidate } from '../types/job-candidate';
+import type { Job } from '../types/job';
 import * as schema from './schema';
 import { jobsTable } from './schema';
 
@@ -73,4 +76,43 @@ export async function saveFilteredJobCandidates(
         duplicates: filtered.accepted.length - created,
         rejected: filtered.rejected.length,
     };
+}
+
+/** Stores one assessment and advances an assessing job to its next state. */
+export async function saveJobAssessment(
+    d1: D1Database,
+    jobId: string,
+    assessment: JobAssessment,
+    assessedAt: Date = new Date(),
+): Promise<Job | null> {
+    const db = drizzle(d1, { schema });
+    const assessmentDetails = assessment.fit
+        ? {
+            matchStrength: assessment.matchStrength,
+            roleMatch: assessment.roleMatch,
+            experienceFit: assessment.experienceFit,
+            graduationEligibility: assessment.graduationEligibility,
+            workAuthorization: assessment.workAuthorization,
+            locationFit: assessment.locationFit,
+            compensation: assessment.compensation,
+            matchedSkills: assessment.matchedSkills,
+            missingRequirements: assessment.missingRequirements,
+        }
+        : null;
+    const updated = await db
+        .update(jobsTable)
+        .set({
+            status: assessment.fit ? 'preparing' : 'not_fit',
+            assessmentReason: assessment.fit ? null : assessment.reason,
+            assessmentDetails,
+            updatedAt: assessedAt,
+        })
+        .where(and(
+            eq(jobsTable.id, jobId),
+            eq(jobsTable.status, 'assessing'),
+        ))
+        .returning()
+        .get();
+
+    return updated ?? null;
 }

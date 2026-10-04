@@ -64,6 +64,20 @@
       "when": 1790101812782,
       "tag": "0008_naive_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790109508214,
+      "tag": "0009_real_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790113424390,
+      "tag": "0010_confused_rhodey",
+      "breakpoints": true
     }
   ]
 }

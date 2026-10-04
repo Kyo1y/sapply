@@ -1,5 +1,6 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from 'drizzle-orm';
+import type { FitJobAssessmentDetails } from '../types/job-assessment';
 
 export const companiesTable = sqliteTable("companies", {
     id:                 text().primaryKey(),
@@ -80,6 +81,10 @@ export const jobsTable = sqliteTable("jobs", {
                             .default(sql`(unixepoch())`),
     lastError:          text(),
     postingHtml:        text(),
+    // Populated only when assessment rejects the job.
+    assessmentReason:   text(),
+    // Populated only when assessment accepts the job.
+    assessmentDetails:  text({ mode: 'json' }).$type<FitJobAssessmentDetails>(),
 }, (table) => [
     index("jobs_companyId_idx").on(table.companyId),
     index("jobs_postedAt_idx").on(table.postedAt),

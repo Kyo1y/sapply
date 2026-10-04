@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import type { recruitersTable } from '../db/schema';
+
+/** A saved recruiter row; scores and reason are null before selection. */
+export type Recruiter = typeof recruitersTable.$inferSelect;
 
 /** A contactable recruiter returned by Autumn for one job. */
 export type RecruiterCandidate = {

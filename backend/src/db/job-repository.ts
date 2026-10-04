@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, exists } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import type { FilteredJobCandidates } from '../jobs/filter-job-candidates';
 import type { JobAssessment } from '../types/job-assessment';
@@ -6,6 +6,48 @@ import type { JobCandidate } from '../types/job-candidate';
 import type { Job } from '../types/job';
 import * as schema from './schema';
 import { jobsTable } from './schema';
+
+/** Reads a saved job for assessment or preparation, or null if it does not exist. */
+export async function getJob(d1: D1Database, jobId: string): Promise<Job | null> {
+    const row = await drizzle(d1).select().from(jobsTable).where(eq(jobsTable.id, jobId)).get();
+    return row ?? null;
+}
+
+/** Marks preparation complete only when the selected recruiter has a saved email draft. */
+export async function completeJobPreparation(
+    d1: D1Database,
+    jobId: string,
+    preparedAt: Date = new Date(),
+): Promise<Job | null> {
+    const db = drizzle(d1);
+    const selectedDraft = db.select({ jobId: schema.recruitersTable.jobId })
+        .from(schema.recruitersTable)
+        .innerJoin(schema.emailDraftsTable, and(
+            eq(schema.emailDraftsTable.jobId, schema.recruitersTable.jobId),
+            eq(schema.emailDraftsTable.recipientEmail, schema.recruitersTable.email),
+        ))
+        .where(and(
+            eq(schema.recruitersTable.jobId, jobsTable.id),
+            eq(schema.recruitersTable.selected, true),
+        ));
+    const row = await db.update(jobsTable)
+        .set({ status: 'pending', lastError: null, updatedAt: preparedAt })
+        .where(and(eq(jobsTable.id, jobId), eq(jobsTable.status, 'preparing'), exists(selectedDraft)))
+        .returning().get();
+    return row ?? null;
+}
+
+/** Records a preparation error without discarding progress or changing completed jobs. */
+export async function saveJobPreparationError(
+    d1: D1Database,
+    jobId: string,
+    error: string,
+    failedAt: Date = new Date(),
+): Promise<void> {
+    await drizzle(d1).update(jobsTable)
+        .set({ lastError: error, updatedAt: failedAt })
+        .where(and(eq(jobsTable.id, jobId), eq(jobsTable.status, 'preparing')));
+}
 
 export type SaveFilteredJobCandidatesResult = {
     accepted: number;

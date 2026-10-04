@@ -67,6 +67,26 @@ describe('getRecruitersAutumn', () => {
             'https://api.autumn.ai/task/task-1/state',
             'https://api.autumn.ai/task/task-1/output?limit=20',
         ]);
+        const requestBody: unknown = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+        expect(requestBody).toMatchObject({
+            task: {
+                brief: 'Find up to 20 current employees at "TikTok" '
+                    + 'who are relevant to recruiting for "Software Engineer Graduate" in "San Jose, CA". '
+                    + 'The job posting is https://careers.example.com/jobs/1. '
+                    + 'Prioritize technical recruiters, early-career or university recruiters, talent acquisition partners, '
+                    + 'recruiting managers, and recruiters responsible for the role\'s function, level, or geography. '
+                    + 'Exclude former employees, external recruiting agencies, and anyone without a work email address. '
+                    + 'Return only name, title, work email, and LinkedIn profile URL.',
+                rules: {
+                    current_employee: 'The person currently works at TikTok.',
+                    relevant_recruiter: 'The person is relevant to recruiting for Software Engineer Graduate.',
+                    contactable: 'The person has a work email address.',
+                },
+                assumptions: [
+                    'Prefer recruiters tied to the role function, early-career hiring, and the job geography.',
+                ],
+            },
+        });
     });
 
     it('throws when Autumn reports a failed task without fetching output', async () => {

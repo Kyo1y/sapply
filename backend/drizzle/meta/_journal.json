@@ -92,6 +92,13 @@
       "when": 1791145363091,
       "tag": "0012_batching-service",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1791294030063,
+      "tag": "0013_batch-notification",
+      "breakpoints": true
     }
   ]
 }

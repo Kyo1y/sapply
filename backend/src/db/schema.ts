@@ -53,6 +53,24 @@ export const batchTable = sqliteTable('batch', {
     createdAt: integer({ mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+/** A rendered email notification about one batch and its sending result. */
+export const batchNotificationTable = sqliteTable('batchNotification', {
+    batchId: text().notNull().references(() => batchTable.id, { onDelete: 'cascade' }),
+    notificationId: text().notNull(),
+    recipientEmail: text().notNull(),
+    status: text({ enum: ['pending', 'sent', 'failed'] }).notNull().default('pending'),
+    subject: text().notNull(),
+    htmlBody: text().notNull(),
+    textBody: text().notNull(),
+    providerEmailId: text(),
+    sentAt: integer({ mode: 'timestamp' }),
+    lastError: text(),
+    createdAt: integer({ mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer({ mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+    primaryKey({ columns: [table.batchId, table.notificationId] }),
+]);
+
 export const jobsTable = sqliteTable("jobs", {
     id:                 text().primaryKey(),
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),

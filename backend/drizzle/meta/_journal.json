@@ -85,6 +85,13 @@
       "when": 1791081166335,
       "tag": "0011_preparation-storage",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791145363091,
+      "tag": "0012_batching-service",
+      "breakpoints": true
     }
   ]
 }

@@ -31,7 +31,7 @@ export async function completeJobPreparation(
             eq(schema.recruitersTable.selected, true),
         ));
     const row = await db.update(jobsTable)
-        .set({ status: 'pending', lastError: null, updatedAt: preparedAt })
+        .set({ status: 'pending', pendingAt: preparedAt, lastError: null, updatedAt: preparedAt })
         .where(and(eq(jobsTable.id, jobId), eq(jobsTable.status, 'preparing'), exists(selectedDraft)))
         .returning().get();
     return row ?? null;

@@ -104,7 +104,7 @@ afterAll(async () => { await miniflare?.dispose(); });
 describe('preparation service on D1', () => {
     it('researches contacts, saves every score, drafts to the selected recruiter, then marks pending', async () => {
         const result = await prepare();
-        expect(result.job).toMatchObject({ id: 'job-1', status: 'pending', lastError: null });
+        expect(result.job).toMatchObject({ id: 'job-1', status: 'pending', pendingAt: expect.any(Date), lastError: null });
         expect(result.recruiter).toMatchObject({ ...contacts[0], selected: true, total_score: 85, reason: winner.explanation });
         expect(result.emailDraft).toMatchObject({
             recipientEmail: winner.email, originalSubject: draft.subject, originalDraft: draft.draftEmail,
@@ -197,7 +197,9 @@ describe('preparation service on D1', () => {
         await saveOutreachDraft(d1, 'job-1', 'sam@example.com', draft);
         expect(await completeJobPreparation(d1, 'job-1')).toBeNull();
         await saveOutreachDraft(d1, 'job-1', winner.email, draft);
-        expect((await completeJobPreparation(d1, 'job-1'))?.status).toBe('pending');
+        const preparedAt = new Date('2026-10-04T12:00:00Z');
+        expect(await completeJobPreparation(d1, 'job-1', preparedAt))
+            .toMatchObject({ status: 'pending', pendingAt: preparedAt });
         expect(await completeJobPreparation(d1, 'job-1')).toBeNull();
     });
 });

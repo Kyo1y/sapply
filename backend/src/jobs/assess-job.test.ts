@@ -18,6 +18,8 @@ const job: Job = {
     postedAt: new Date('2026-09-21T12:00:00Z'),
     displayedAge: null,
     salaryText: '$120,000-$140,000',
+    batchId: null,
+    pendingAt: null,
     status: 'assessing',
     createdAt: new Date('2026-09-22T12:00:00Z'),
     updatedAt: new Date('2026-09-22T12:00:00Z'),

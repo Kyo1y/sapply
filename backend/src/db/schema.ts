@@ -47,6 +47,12 @@ export const companySourcesTable = sqliteTable("companySources", {
         .on(table.provider, table.externalKey),
 ]);
 
+/** A fixed group of prepared jobs to announce in one notification. */
+export const batchTable = sqliteTable('batch', {
+    id: text().primaryKey(),
+    createdAt: integer({ mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 export const jobsTable = sqliteTable("jobs", {
     id:                 text().primaryKey(),
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),
@@ -66,6 +72,9 @@ export const jobsTable = sqliteTable("jobs", {
     postedAt:           integer({ mode: 'timestamp' }),
     displayedAge:       text(),
     salaryText:         text(),
+    batchId:            text().references(() => batchTable.id),
+    // Starts the notification waiting period when preparation finishes.
+    pendingAt:          integer({ mode: 'timestamp' }),
     // Processing begins once posting HTML is available; later states track review and outreach.
     status:             text({ enum: [
                             'queued', 'fetching', 'processing',
@@ -88,6 +97,9 @@ export const jobsTable = sqliteTable("jobs", {
 }, (table) => [
     index("jobs_companyId_idx").on(table.companyId),
     index("jobs_postedAt_idx").on(table.postedAt),
+    index("jobs_batchId_idx").on(table.batchId),
+    index("jobs_unbatched_pending_idx").on(table.pendingAt)
+        .where(sql`${table.status} = 'pending' AND ${table.batchId} IS NULL`),
     uniqueIndex("jobs_companySourceId_externalId_unique")
         .on(table.companySourceId, table.externalId),
     uniqueIndex("jobs_provider_externalId_unique")

@@ -2,6 +2,7 @@ import type { JobCandidate } from '../../types/job-candidate';
 import * as ashby from '../ashby/ashby-client';
 import { getJobDetails as getGreenhouseJobDetails } from '../greenhouse/greenhouse-client';
 import { fetchJobDetails as fetchLeverJobDetails } from '../lever/lever-client';
+import { getJobDetails as getWorkdayJobDetails } from '../workday/workday-client';
 import { fetchJson, httpUrl, optionalText, record, requiredText } from '../provider-fields';
 
 const APPLYGUY_FEED_URL =
@@ -111,6 +112,9 @@ export async function jobDraftToJobCandidate(
     }
     if (hostname === 'jobs.ashbyhq.com') {
         return ashby.fetchJobDetails(job.listingUrl, job.companyName, fetcher);
+    }
+    if (hostname.endsWith('.myworkdayjobs.com')) {
+        return getWorkdayJobDetails(job.listingUrl, job.companyName, fetcher);
     }
     return fetchJobDetails(job, apiKey, fetcher);
 }

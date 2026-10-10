@@ -76,7 +76,7 @@ export const jobsTable = sqliteTable("jobs", {
     companyId:          text().references(() => companiesTable.id, { onDelete: 'set null' }),
     companySourceId:    text().references(() => companySourcesTable.id, { onDelete: 'set null' }),
     provider:           text({ enum: [
-                            'manual', 'greenhouse', 'lever', 'ashby', 'linkedin', 'applyguy',
+                            'manual', 'greenhouse', 'lever', 'ashby', 'linkedin', 'applyguy', 'workday',
                         ] })
                             .notNull()
                             .default('manual'),

@@ -1,4 +1,5 @@
 import type { DetectedCompanySource } from '../types/company';
+import { parseWorkdayUrl } from '../integrations/workday/workday-client';
 
 /** Splits a URL path into its nonempty parts. */
 function pathSegments(url: URL): string[] {
@@ -69,16 +70,13 @@ export default function detectCompanySource(
     }
 
     if (hostname.endsWith('.myworkdayjobs.com')) {
-        const site = segments[0];
-
-        if (!site) {
-            return null;
-        }
+        const source = parseWorkdayUrl(url);
+        if (!source) return null;
 
         return {
             provider: 'workday',
-            externalKey: `${hostname}/${site.toLowerCase()}`,
-            sourceUrl: `${url.origin}/${site}`,
+            externalKey: `${hostname}/${source.site.toLowerCase()}`,
+            sourceUrl: source.boardUrl,
         };
     }
 

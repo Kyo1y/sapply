@@ -1,6 +1,6 @@
 /** A posting fetched from a provider, before filtering or saving it. */
 export type JobCandidate = {
-    provider: 'greenhouse' | 'lever' | 'ashby' | 'linkedin' | 'applyguy';
+    provider: 'greenhouse' | 'lever' | 'ashby' | 'linkedin' | 'applyguy' | 'workday';
     externalId: string;
     companyName: string;
     title: string;

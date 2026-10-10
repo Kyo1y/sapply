@@ -43,4 +43,18 @@ describe('detectCompanySource', () => {
             'https://careers.example.com/jobs/software-engineer',
         )).toBeNull();
     });
+
+    it.each(['en-US', 'en-GB', 'fr-CA'])('detects a Workday site after the %s locale', (locale) => {
+        expect(detectCompanySource(
+            `https://nvidia.wd5.myworkdayjobs.com/${locale}/NVIDIAExternalCareerSite/job/US/Engineer_JR123`,
+        )).toEqual({
+            provider: 'workday',
+            externalKey: 'nvidia.wd5.myworkdayjobs.com/nvidiaexternalcareersite',
+            sourceUrl: 'https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite',
+        });
+    });
+
+    it('does not register a Workday locale without a site', () => {
+        expect(detectCompanySource('https://nvidia.wd5.myworkdayjobs.com/en-US')).toBeNull();
+    });
 });

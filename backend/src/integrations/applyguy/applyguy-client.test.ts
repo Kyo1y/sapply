@@ -52,7 +52,7 @@ describe('ApplyGuy job candidates', () => {
             ...job,
             id: '85bb4a2a-df45-40ff-ada3-87d6fd7b413f',
             company: 'Boeing',
-            listingUrl: 'https://boeing.wd1.myworkdayjobs.com/site/job/example',
+            listingUrl: 'https://careers.example.com/jobs/example',
         };
         const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
             expect(new Headers(init?.headers).get('authorization')).toBe('Bearer paid-key');
@@ -104,5 +104,24 @@ describe('ApplyGuy job candidates', () => {
         expect(candidate.descriptionHtml).toBe('<p>Greenhouse description</p>');
         expect(candidate.postingTime).toEqual({ kind: 'timestamp', at: new Date('2026-09-23T10:00:00Z') });
         expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('/v1/boards/example/jobs/123');
+    });
+
+    it('routes Workday URLs through the public client without a paid API key', async () => {
+        const workdayJob = {
+            ...job,
+            listingUrl: 'https://boeing.wd1.myworkdayjobs.com/en-US/External/job/Seattle/Engineer_R123',
+        };
+        const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+            expect(new Headers(init?.headers).has('authorization')).toBe(false);
+            return new Response(JSON.stringify({ jobPostingInfo: {
+                jobReqId: 'R123', title: 'Software Engineer', location: 'Seattle, WA',
+                jobDescription: '<p>Workday description</p>', startDate: '2026-10-10',
+            } }));
+        });
+        const candidate = await jobDraftToJobCandidate(workdayJob, '', fetcher);
+        expect(candidate.provider).toBe('workday');
+        expect(candidate.externalId).toBe('boeing:R123');
+        expect(candidate.descriptionHtml).toBe('<p>Workday description</p>');
+        expect(String(fetcher.mock.calls[0][0])).toContain('/wday/cxs/boeing/External/job/Seattle/Engineer_R123');
     });
 });

@@ -4,7 +4,7 @@ import { fetchJson, httpUrl, optionalText, record, requiredText, timestamp } fro
 const PAGE_SIZE = 100;
 
 /** Maps one public Lever posting into the shared pre-filter job shape. */
-export function parseLeverJob(value: unknown, companyName: string): JobCandidate {
+export function postingToJobCandidate(value: unknown, companyName: string): JobCandidate {
     const job = record(value, 'Lever job');
     const categories = record(job.categories, 'Lever categories');
     const lists = Array.isArray(job.lists) ? job.lists : [];
@@ -38,7 +38,7 @@ export function parseLeverJob(value: unknown, companyName: string): JobCandidate
 }
 
 /** Fetches one Lever posting identified by its employer listing URL. */
-export async function getLeverJobCandidateFromUrl(
+export async function fetchJobDetails(
     sourceUrl: string,
     companyName: string,
     fetcher: typeof fetch = fetch,
@@ -53,11 +53,11 @@ export async function getLeverJobCandidateFromUrl(
     }
     const apiHost = url.hostname === 'jobs.eu.lever.co' ? 'api.eu.lever.co' : 'api.lever.co';
     const apiUrl = `https://${apiHost}/v0/postings/${encodeURIComponent(boardName)}/${encodeURIComponent(postingId)}?mode=json`;
-    return parseLeverJob(await fetchJson(apiUrl, 'Lever', fetcher), companyName);
+    return postingToJobCandidate(await fetchJson(apiUrl, 'Lever', fetcher), companyName);
 }
 
 /** Fetches every public posting from one Lever board, including paginated boards. */
-export async function listLeverJobCandidates(
+export async function getJobCandidates(
     boardName: string,
     companyName: string,
     fetcher: typeof fetch = fetch,
@@ -69,7 +69,7 @@ export async function listLeverJobCandidates(
         const url = `https://${host}/v0/postings/${encodeURIComponent(boardName)}?mode=json&skip=${skip}&limit=${PAGE_SIZE}`;
         const page = await fetchJson(url, 'Lever', fetcher);
         if (!Array.isArray(page)) throw new Error('Lever response must be a jobs array');
-        jobs.push(...page.map((job) => parseLeverJob(job, companyName)));
+        jobs.push(...page.map((job) => postingToJobCandidate(job, companyName)));
         if (page.length < PAGE_SIZE) return jobs;
     }
 }

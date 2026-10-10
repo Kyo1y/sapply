@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getGreenhouseJobCandidate, listGreenhouseJobCandidates } from './greenhouse/greenhouse-client';
-import { getLeverJobCandidateFromUrl, listLeverJobCandidates, parseLeverJob } from './lever/lever-client';
-import { getAshbyJobCandidateFromUrl, listAshbyJobCandidates } from './ashby/ashby-client';
-import { getLinkedInJobCandidate, parseLinkedInJobCards, searchLinkedInJobCandidates, searchLinkedInJobCards } from './linkedin/linkedin-client';
+import { getJobDetails as getGreenhouseJobDetails, getJobCandidates as getGreenhouseJobCandidates } from './greenhouse/greenhouse-client';
+import { fetchJobDetails as fetchLeverJobDetails, getJobCandidates as getLeverJobCandidates, postingToJobCandidate as leverPostingToJobCandidate } from './lever/lever-client';
+import { fetchJobDetails as fetchAshbyJobDetails, getJobCandidates as getAshbyJobCandidates } from './ashby/ashby-client';
+import { getJobDetails as getLinkedInJobDetails, parseLinkedInJobCards, getJobCandidates as getLinkedInJobCandidates, searchLinkedInJobCards } from './linkedin/linkedin-client';
 
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), {
     headers: { 'content-type': 'application/json' },
@@ -13,16 +13,16 @@ describe('provider job candidates', () => {
         const fetcher = vi.fn(async () => jsonResponse({
             id: 42,
             title: 'Software Engineer I',
+            company_name: 'Example',
+            updated_at: '2026-09-21T09:00:00Z',
             location: { name: 'New York, NY' },
             absolute_url: 'https://boards.greenhouse.io/example/jobs/42',
             first_published: '2026-09-21T09:00:00Z',
             content: '<p>0-2 years</p>',
             pay_input_ranges: [{ title: 'NYC', currency_type: 'USD', min_cents: 10000000, max_cents: 14000000 }],
         })) as unknown as typeof fetch;
-        const candidate = await getGreenhouseJobCandidate(
-            'example', 'Example',
-            { id: 42, title: 'Software Engineer I', updatedAt: new Date('2026-09-21T09:00:00Z') },
-            fetcher,
+        const candidate = await getGreenhouseJobDetails(
+            'https://boards.greenhouse.io/example/jobs/42', fetcher,
         );
         expect(candidate).toMatchObject({
             provider: 'greenhouse', externalId: '42', companyName: 'Example',
@@ -36,17 +36,19 @@ describe('provider job candidates', () => {
     it('fetches Greenhouse details only for technical, non-senior titles', async () => {
         const fetcher = vi.fn(async (url: string) => jsonResponse(url.endsWith('/jobs')
             ? { jobs: [
-                { id: 1, title: 'Senior Software Engineer', updated_at: '2026-09-21T09:00:00Z' },
-                { id: 2, title: 'Software Engineer I', updated_at: '2026-09-21T10:00:00Z' },
-                { id: 3, title: 'Product Manager', updated_at: '2026-09-21T11:00:00Z' },
+                { id: 1, title: 'Senior Software Engineer' },
+                { id: 2, title: 'Software Engineer I' },
+                { id: 3, title: 'Product Manager' },
             ] }
             : {
                 id: 2, title: 'Software Engineer I',
+                company_name: 'Example',
+                updated_at: '2026-09-21T10:00:00Z',
                 location: { name: 'New York, NY' },
                 absolute_url: 'https://boards.greenhouse.io/example/jobs/2',
                 content: '<p>New graduate</p>',
             })) as unknown as typeof fetch;
-        const candidates = await listGreenhouseJobCandidates('example', 'Example', fetcher);
+        const candidates = await getGreenhouseJobCandidates('example', fetcher);
         expect(candidates).toHaveLength(1);
         expect(candidates[0].externalId).toBe('2');
         expect(candidates[0].postingTime).toEqual({
@@ -66,14 +68,14 @@ describe('provider job candidates', () => {
             salaryRange: { currency: 'USD', min: 110000, max: 140000, interval: 'year' },
         };
         const fetcher = vi.fn(async () => jsonResponse([job])) as unknown as typeof fetch;
-        const [candidate] = await listLeverJobCandidates('example', 'Example', fetcher);
+        const [candidate] = await getLeverJobCandidates('example', 'Example', fetcher);
         expect(candidate).toMatchObject({
             provider: 'lever', externalId: 'abc', location: 'Boston, MA',
             salaryText: 'USD 110000–140000 year',
         });
         expect(candidate.descriptionHtml).toContain('<li>New grad</li>');
         expect(fetcher).toHaveBeenCalledOnce();
-        expect(() => parseLeverJob({ ...job, createdAt: undefined }, 'Example'))
+        expect(() => leverPostingToJobCandidate({ ...job, createdAt: undefined }, 'Example'))
             .toThrow('Lever createdAt must be a valid timestamp');
     });
 
@@ -87,7 +89,7 @@ describe('provider job candidates', () => {
         };
         const fetcher = vi.fn(async () => jsonResponse(job)) as unknown as typeof fetch;
 
-        const candidate = await getLeverJobCandidateFromUrl(job.hostedUrl, 'Example', fetcher);
+        const candidate = await fetchLeverJobDetails(job.hostedUrl, 'Example', fetcher);
 
         expect(candidate.externalId).toBe('abc');
         expect(vi.mocked(fetcher).mock.calls[0][0]).toBe(
@@ -105,7 +107,7 @@ describe('provider job candidates', () => {
             isListed: true,
         };
         const fetcher = vi.fn(async () => jsonResponse({ jobs: [job, { ...job, isListed: false }] })) as unknown as typeof fetch;
-        const candidates = await listAshbyJobCandidates('example', 'Example', fetcher);
+        const candidates = await getAshbyJobCandidates('example', 'Example', fetcher);
         expect(candidates).toHaveLength(1);
         expect(candidates[0]).toMatchObject({
             provider: 'ashby', externalId: job.jobUrl,
@@ -124,7 +126,7 @@ describe('provider job candidates', () => {
         };
         const fetcher = vi.fn(async () => jsonResponse({ jobs: [job] })) as unknown as typeof fetch;
 
-        const candidate = await getAshbyJobCandidateFromUrl(job.jobUrl, 'Example', fetcher);
+        const candidate = await fetchAshbyJobDetails(job.jobUrl, 'Example', fetcher);
 
         expect(candidate.externalId).toBe(job.jobUrl);
         expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('/job-board/example');
@@ -146,7 +148,7 @@ describe('provider job candidates', () => {
                 : '<div class="show-more-less-html__markup"><p>Early career role</p></div>',
         )) as unknown as typeof fetch;
         const [card] = await searchLinkedInJobCards('software engineer', '102571732', 0, fetcher);
-        const candidate = await getLinkedInJobCandidate(card, fetcher);
+        const candidate = await getLinkedInJobDetails(card, fetcher);
         expect(candidate).toMatchObject({
             provider: 'linkedin', externalId: '123',
             applyUrl: 'https://www.linkedin.com/jobs/view/123/',
@@ -174,7 +176,7 @@ describe('provider job candidates', () => {
                 ? html
                 : '<div class="show-more-less-html__markup"><p>New grad</p></div>',
         )) as unknown as typeof fetch;
-        const candidates = await searchLinkedInJobCandidates('software engineer', '102571732', 0, fetcher);
+        const candidates = await getLinkedInJobCandidates('software engineer', '102571732', 0, fetcher);
         expect(candidates.map((candidate) => candidate.externalId)).toEqual(['1']);
         expect(fetcher).toHaveBeenCalledTimes(2);
     });

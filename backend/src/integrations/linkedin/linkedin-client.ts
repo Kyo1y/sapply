@@ -76,7 +76,7 @@ export async function searchLinkedInJobCards(
 }
 
 /** Fetches one guest detail page and attaches its description to a search card. */
-export async function getLinkedInJobCandidate(
+export async function getJobDetails(
     card: LinkedInJobCard,
     fetcher: typeof fetch = fetch,
 ): Promise<JobCandidate> {
@@ -104,7 +104,7 @@ export async function getLinkedInJobCandidate(
 }
 
 /** Pre-filters one search page, then loads full details for the surviving cards. */
-export async function searchLinkedInJobCandidates(
+export async function getJobCandidates(
     keywords: string,
     geoId: string,
     start = 0,
@@ -117,7 +117,7 @@ export async function searchLinkedInJobCandidates(
         isPotentialUSLocation(card.location) &&
         isRecentDisplayedAge(card.displayedAge)
     )) {
-        candidates.push(await getLinkedInJobCandidate(card, fetcher));
+        candidates.push(await getJobDetails(card, fetcher));
     }
     return candidates;
 }

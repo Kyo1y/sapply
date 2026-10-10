@@ -1,7 +1,7 @@
 import type { JobCandidate } from '../../types/job-candidate';
-import { getAshbyJobCandidateFromUrl } from '../ashby/ashby-client';
-import { getGreenhouseJobCandidateFromUrl } from '../greenhouse/greenhouse-client';
-import { getLeverJobCandidateFromUrl } from '../lever/lever-client';
+import * as ashby from '../ashby/ashby-client';
+import { getJobDetails as getGreenhouseJobDetails } from '../greenhouse/greenhouse-client';
+import { fetchJobDetails as fetchLeverJobDetails } from '../lever/lever-client';
 import { fetchJson, httpUrl, optionalText, record, requiredText } from '../provider-fields';
 
 const APPLYGUY_FEED_URL =
@@ -19,7 +19,7 @@ type ApplyGuyFeedJob = {
 };
 
 /** Validates one public ApplyGuy feed entry. */
-function parseApplyGuyFeedJob(value: unknown): ApplyGuyFeedJob {
+function postingToJobDraft(value: unknown): ApplyGuyFeedJob {
     const job = record(value, 'ApplyGuy job');
     const posted = requiredText(job.posted, 'ApplyGuy posted');
     const midnight = /^\d{4}-\d{2}-\d{2}$/.test(posted)
@@ -39,7 +39,7 @@ function parseApplyGuyFeedJob(value: unknown): ApplyGuyFeedJob {
 }
 
 /** Fetches an unsupported ATS posting from ApplyGuy's paid detail API. */
-async function getApplyGuyJobCandidate(
+async function fetchJobDetails(
     job: ApplyGuyFeedJob,
     apiKey: string,
     fetcher: typeof fetch,
@@ -93,41 +93,36 @@ async function getApplyGuyJobCandidate(
 }
 
 /** Resolves one feed entry through its ATS client or ApplyGuy's paid detail API. */
-export async function parseApplyGuyJob(
+export async function jobDraftToJobCandidate(
     value: unknown,
     apiKey: string,
     fetcher: typeof fetch = fetch,
 ): Promise<JobCandidate> {
-    const job = parseApplyGuyFeedJob(value);
+    const job = postingToJobDraft(value);
     const hostname = new URL(job.listingUrl).hostname;
     if (
         hostname === 'boards.greenhouse.io' ||
         hostname === 'job-boards.greenhouse.io'
     ) {
-        return getGreenhouseJobCandidateFromUrl(
-            job.listingUrl,
-            job.companyName,
-            job.posted,
-            fetcher,
-        );
+        return getGreenhouseJobDetails(job.listingUrl, fetcher);
     }
     if (hostname === 'jobs.lever.co' || hostname === 'jobs.eu.lever.co') {
-        return getLeverJobCandidateFromUrl(job.listingUrl, job.companyName, fetcher);
+        return fetchLeverJobDetails(job.listingUrl, job.companyName, fetcher);
     }
     if (hostname === 'jobs.ashbyhq.com') {
-        return getAshbyJobCandidateFromUrl(job.listingUrl, job.companyName, fetcher);
+        return ashby.fetchJobDetails(job.listingUrl, job.companyName, fetcher);
     }
-    return getApplyGuyJobCandidate(job, apiKey, fetcher);
+    return fetchJobDetails(job, apiKey, fetcher);
 }
 
 /** Fetches the public new-grad feed and fully resolves each job posting. */
-export async function listApplyGuyJobCandidates(
+export async function getJobCandidates(
     apiKey: string,
     fetcher: typeof fetch = fetch,
 ): Promise<JobCandidate[]> {
     const body = record(await fetchJson(APPLYGUY_FEED_URL, 'ApplyGuy', fetcher), 'ApplyGuy feed');
     if (!Array.isArray(body.jobs)) throw new Error('ApplyGuy feed does not contain a jobs array');
     const candidates: JobCandidate[] = [];
-    for (const job of body.jobs) candidates.push(await parseApplyGuyJob(job, apiKey, fetcher));
+    for (const job of body.jobs) candidates.push(await jobDraftToJobCandidate(job, apiKey, fetcher));
     return candidates;
 }

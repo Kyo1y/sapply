@@ -2,7 +2,7 @@ import type { JobCandidate } from '../../types/job-candidate';
 import { fetchJson, httpUrl, optionalText, record, requiredText, timestamp } from '../provider-fields';
 
 /** Maps one public Ashby posting into the shared pre-filter job shape. */
-export function parseAshbyJob(value: unknown, companyName: string): JobCandidate {
+export function postingToJobCandidate(value: unknown, companyName: string): JobCandidate {
     const job = record(value, 'Ashby job');
     const sourceUrl = httpUrl(job.jobUrl, 'Ashby jobUrl');
     const compensation = job.compensation == null
@@ -27,7 +27,7 @@ export function parseAshbyJob(value: unknown, companyName: string): JobCandidate
 }
 
 /** Fetches the public, listed postings from one Ashby board. */
-export async function listAshbyJobCandidates(
+export async function getJobCandidates(
     boardName: string,
     companyName: string,
     fetcher: typeof fetch = fetch,
@@ -37,11 +37,11 @@ export async function listAshbyJobCandidates(
     if (!Array.isArray(body.jobs)) throw new Error('Ashby response must contain a jobs array');
     return body.jobs
         .filter((job) => record(job, 'Ashby job').isListed !== false)
-        .map((job) => parseAshbyJob(job, companyName));
+        .map((job) => postingToJobCandidate(job, companyName));
 }
 
 /** Fetches the matching posting from the Ashby board named in a listing URL. */
-export async function getAshbyJobCandidateFromUrl(
+export async function fetchJobDetails(
     sourceUrl: string,
     companyName: string,
     fetcher: typeof fetch = fetch,
@@ -52,7 +52,7 @@ export async function getAshbyJobCandidateFromUrl(
     if (!boardName || !postingId) {
         throw new Error('Ashby listing URL must contain a board and posting ID');
     }
-    const candidates = await listAshbyJobCandidates(boardName, companyName, fetcher);
+    const candidates = await getJobCandidates(boardName, companyName, fetcher);
     const candidate = candidates.find((candidate) => {
         const candidateId = new URL(candidate.sourceUrl).pathname.split('/').filter(Boolean)[1];
         return candidateId === postingId;

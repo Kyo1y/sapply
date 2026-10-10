@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { listApplyGuyJobCandidates, parseApplyGuyJob } from './applyguy-client';
+import { getJobCandidates, jobDraftToJobCandidate } from './applyguy-client';
 
 const job = {
     id: 'custom:microsoft:872b1461dd8af2bce47d',
@@ -14,7 +14,7 @@ const job = {
 
 describe('ApplyGuy job candidates', () => {
     it('keeps free-feed data for custom IDs that the paid API cannot accept', async () => {
-        expect(await parseApplyGuyJob(job, 'test-key')).toEqual({
+        expect(await jobDraftToJobCandidate(job, 'test-key')).toEqual({
             provider: 'applyguy',
             externalId: job.id,
             companyName: 'Microsoft',
@@ -33,17 +33,17 @@ describe('ApplyGuy job candidates', () => {
             updatedAt: '2026-09-22T16:45:58.630Z',
             jobs: [job],
         }))) as unknown as typeof fetch;
-        const candidates = await listApplyGuyJobCandidates('test-key', fetcher);
+        const candidates = await getJobCandidates('test-key', fetcher);
         expect(candidates).toHaveLength(1);
         expect(candidates[0].externalId).toBe(job.id);
         expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('data/new-grad-jobs.json');
     });
 
     it('rejects malformed dates and feeds', async () => {
-        await expect(parseApplyGuyJob({ ...job, posted: '2026-02-30' }, 'test-key'))
+        await expect(jobDraftToJobCandidate({ ...job, posted: '2026-02-30' }, 'test-key'))
             .rejects.toThrow('ApplyGuy posted must be a calendar date');
         const fetcher = vi.fn(async () => new Response(JSON.stringify({ jobs: null }))) as unknown as typeof fetch;
-        await expect(listApplyGuyJobCandidates('test-key', fetcher))
+        await expect(getJobCandidates('test-key', fetcher))
             .rejects.toThrow('ApplyGuy feed does not contain a jobs array');
     });
 
@@ -71,7 +71,7 @@ describe('ApplyGuy job candidates', () => {
             }));
         }) as unknown as typeof fetch;
 
-        const candidate = await parseApplyGuyJob(apiJob, 'paid-key', fetcher);
+        const candidate = await jobDraftToJobCandidate(apiJob, 'paid-key', fetcher);
 
         expect(candidate.provider).toBe('applyguy');
         expect(candidate.descriptionHtml).toBe('<p>Build software.</p>');
@@ -89,18 +89,20 @@ describe('ApplyGuy job candidates', () => {
         };
         const fetcher = vi.fn(async () => new Response(JSON.stringify({
             id: 123,
+            company_name: 'Example',
             title: greenhouseJob.title,
             absolute_url: greenhouseJob.listingUrl,
             location: { name: greenhouseJob.location },
             content: '<p>Greenhouse description</p>',
+            updated_at: '2026-09-23T10:00:00Z',
             pay_input_ranges: [],
         }))) as unknown as typeof fetch;
 
-        const candidate = await parseApplyGuyJob(greenhouseJob, 'unused-key', fetcher);
+        const candidate = await jobDraftToJobCandidate(greenhouseJob, 'unused-key', fetcher);
 
         expect(candidate.provider).toBe('greenhouse');
         expect(candidate.descriptionHtml).toBe('<p>Greenhouse description</p>');
-        expect(candidate.postingTime).toEqual({ kind: 'calendar-date', date: greenhouseJob.posted });
+        expect(candidate.postingTime).toEqual({ kind: 'timestamp', at: new Date('2026-09-23T10:00:00Z') });
         expect(vi.mocked(fetcher).mock.calls[0][0]).toContain('/v1/boards/example/jobs/123');
     });
 });
